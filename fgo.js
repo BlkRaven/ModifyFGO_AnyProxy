@@ -1,17 +1,26 @@
 "use strict";
-const AnyProxy = require("./anyproxy");
+const AnyProxy = require("anyproxy");
 const exec = require('child_process').exec;
 const fs = require("fs");
-const crypto = require('crypto');
 
-const profile = "C:/Users/heqyou_free/Documents/Tencent Files/774471396/FileRecv/xfgo_anyproxy/profile/";
-const trunfile = "C:/Users/heqyou_free/Documents/Tencent Files/774471396/FileRecv/xfgo_anyproxy/trunfile/";
+//user setting path
+const profile = "profile/";
+//user turn random number path
+const turnfile = "turnfile/";
+//server host
 const signalServerAddressHost = "http://com.locbytes.xfgo.signal/";
+// for new users that do not have setting file on disk
 const defaultSetting = "{\"userid\":100100100100,\"password\":\"password\",\"battleCancel\":true,\"uHpSwitch\":true,\"uAtkSwitch\":true,\"uHp\":10,\"uAtk\":10,\"limitCountSwitch\":true,\"skillLv\":true,\"tdLv\":true,\"enemyActNumSwitch\":true,\"enemyActNumTo\":0,\"enemyChargeTurnSwitch\":true,\"enemyChargeTurnto\":6,\"replaceSvtSwitch\":true,\"replaceSvtSpinner\":6,\"replaceSvt2\":true,\"replaceSvt3\":true,\"replaceSvt4\":true,\"replaceSvt5\":true,\"replaceSvt6\":true,\"replaceCraftSwitch\":true,\"replaceCraftSpinner\":1}";
-const debugMode = 2;
-//1- textfile, 2- consle log
-const debugFile = "C:/Users/heqyou_free/Documents/Tencent Files/774471396/FileRecv/xfgo_anyproxy/debug/";
+// Proxy Port
+const proxyPort = 8001;
+// Web UI
+const webInterface = false;
+// Web Port, when unavailble
+const webInterfacePort = 8002;
+//show anyproxy log in console
+const silent = false;
 
+//check cert
 if (!AnyProxy.utils.certMgr.ifRootCAFileExists()) {
 	AnyProxy.utils.certMgr.generateRootCA((error, keyPath) => {
 		if (!error) {
@@ -26,106 +35,93 @@ if (!AnyProxy.utils.certMgr.ifRootCAFileExists()) {
 		}
 	});
 }
+
 const options = {
-	port: 8001,
-	webInterface: 8002,
+	port: proxyPort,
+	webInterface: {
+    enable: webInterface,
+    webPort: webInterfacePort
+  },
 	rule: {
-		summary: "ModifyFGO",
+		summary: "ModifyFGO by heqyou_free",
 		*beforeSendRequest(requestDetail) {
+			// cer or random number
 			if(requestDetail.url.indexOf(signalServerAddressHost)>=0){
 				if(requestDetail.requestOptions.method == "GET"){
+					// cer
 					if(requestDetail.requestOptions.path.indexOf("getRootCA")>0){
-						console.log("获取根证书");
+						//read cer form disk
 						const rootCA = fs.readFileSync(AnyProxy.utils.certMgr.getRootDirPath()+"/rootCA.crt").toString();
-						return {
-							response: {
-								statusCode: 200,
-								header: { 'Content-Type': 'text/html' },
-								body: rootCA
-							}
-						};
+						return responseBody(RootCA);
 					}else{
+					// random number
 						var userId=requestDetail.requestOptions.path.substring(2);
+						// get random number
 						var randomNum=3+parseInt(Math.random()*15, 10);
-						var fileName=userId+".txt";
-						fs.writeFileSync("trun"+fileName,randomNum);
-						return {
-							response: {
-								statusCode: 200,
-								header: { 'Content-Type': 'text/html' },
-								body: randomNum.toString()
-							}
-						};
+						// save random number to disk
+						fs.writeFileSync(turnfile+"turn"+userId+".txt",randomNum);
+						return responseBody(randomNum.toString());
 					}
 				}
 				if(requestDetail.requestOptions.method == "POST"){
-					console.log("更新配置");
-					var option = JSON.parse(requestDetail.requestData.toString());
+					// get request body
+					var optionString = requestDetail.requestData.toString();
+					// change String into JSON object
+					var option = JSON.parse(optionString);
+					// get userid
 					var uid = option.uid;
 					fs.exists("dirName", function(exists) {
 						if(exists){
+							// read old setting
 							var oldOption = JSON.parse(profile+uid+"options.json");
+							// is password correct
 							if(option.pw == oldOption.pw){
+								// save setting to disk
 								fs.writeFileSync(profile+uid+"options.json", optionString);
-								return {
-									response: {
-										statusCode: 200,
-										header: { 'Content-Type': 'text/html' },
-										body: "success"
-									}
-								};
+								return responseBody("success");
 							}else{
-								return {
-									response: {
-										statusCode: 200,
-										header: { 'Content-Type': 'text/html' },
-										body: "failed"
-									}
-								};
+								return responseBody("failed");
 							}
 						}else{
+						// is new user
 							fs.writeFileSync(profile+uid+"options.json", optionString);
-							return {
-								response: {
-									statusCode: 200,
-									header: { 'Content-Type': 'text/html' },
-									body: "success"
-								}
-							};
+							return responseBody("success");
 						}
 					});
 				}
 			}else{
-				var requestData = requestDetail.requestData.toString();
-				var verify1 = (requestDetail.requestData.indexOf("key=battleresult")>0);
-				var verify2 = (requestDetail.url.indexOf("ac.php")>0);
-				if (verify1 && verify2) {
-					var uidreg = /(?<=userId=)\d\d\d\d\d\d\d\d\d\d\d\d/gi;
-					var uid = requestDetail.url.match(uidreg);
-					var newRequestData = requestData;
+				if (requestDetail.url.indexOf("ac.php")>0 && requestDetail.requestData.indexOf("key=battleresult")>0) {
+					// get userid
+					var uid = getUserID(requestDetail.url);
+					// read setting
 					var options = readSetting(uid);
-					var verify3 = (options.battleCancel == "true");
-					if(verify3){
-						var data = requestData.split("&");
+					if(options.battleCancel == true){
+						// split request data with &
+						var data = requestDetail.requestData.toString().split("&");
+						// url decode
 						data[11]= customUrlDecode(data[11]);
-						var temp = data[11].substring(7);
-						var json=JSON.parse(temp);
+						// get result
+						var json = JSON.parse(data[11].substring(7));
 						if(json.battleResult == 3){
-							var userId = data[12].substring(7);
-							var fileName = userId+".txt";
-							var randomNum = parseInt(fs.readFileSync(trunfile+fileName), 10);
-							newRequestData = "";
+							//get userid
+							var uid = getUserID(requestDetail.url);
+							var randomNum = parseInt(fs.readFileSync(turnfile+"turn"+uid+".txt"), 10);
+							// set result to win
 							json.battleResult = 1;
+							// set turn num to random
 							json.elapsedTurn = randomNum;
+							// clear alive beast
 							json.aliveUniqueIds = [];
+							// change JSON object into String
 							temp=JSON.stringify(json);
+							// encode result
 							data[11]= "result="+customUrlEncode(temp);
-							var i=1;
+							// connect array with &
+							var newRequestData = "";
 							data.forEach( value => {
 								newRequestData += value;
-								if(i<data.length){
-									newRequestData+="&";
-									++i;
+								for (var i = 1;i<data.length;i++){
+									newRequestData += "&";
 								}
 							});
 						}
@@ -136,26 +132,25 @@ const options = {
 				}
 			}
 		},
+
 		*beforeSendResponse(requestDetail, responseDetail) {
-			var response = Object.assign({}, responseDetail.response);
-			var verify1 = (requestDetail.requestData.indexOf("key=battlesetup")>0);
-			var verify2 = (requestDetail.requestData.indexOf("key=battleresume")>0);
-			var verify3 = (requestDetail.url.indexOf("ac.php")>0);
-			if( (verify1||verify2) && verify3 ){
-				var uidreg = /(?<=userId=)\d\d\d\d\d\d\d\d\d\d\d\d/gi;
-				var uid = requestDetail.url.match(uidreg);
+			if((requestDetail.requestData.indexOf("key=battlesetup")>0||requestDetail.requestData.indexOf("key=battleresume")>0)&&requestDetail.url.indexOf("ac.php")>0){
+				var response = Object.assign({}, responseDetail.response);
+				//get response body
 				var rawBody = response.body.toString();
+				//replace %3D to =
 				rawBody = rawBody.replace(/%3D/g, "=");
+				//base64 encode
 				var jsonStr = new Buffer(rawBody, "base64").toString();
+				//change into JSON object
 				var decJson = JSON.parse(jsonStr);
+
+				//need XFGO
 				decJson.sign="";
-				cLog(rawBody,"origin");
-				cLog(jsonStr,"decode");
+
+				//get setting
+				var uid = getUserID(requestDetail.url);
 				var options = readSetting(uid);
-				cLog(uid,"userid");
-				cLog(JSON.stringify(options),"setting");
-				var uHpSwitch = options.uHpSwitch;
-				var uAtkSwitch = options.uAtkSwitch;
 				var uHp = options.uHp;
 				var uAtk = options.uAtk;
 				var limitCountSwitch = options.limitCountSwitch;
@@ -173,56 +168,69 @@ const options = {
 				var replaceSvt4 = options.replaceSvt4;
 				var replaceSvt5 = options.replaceSvt5;
 				var replaceSvt6 = options.replaceSvt6;
-				var replaceCraftSwitch = true//options.replaceCraftSwitch;
+				var replaceCraftSwitch = options.replaceCraftSwitch;
 				var replaceCraftSpinner = options.replaceCraftSpinner;
+
 				if (decJson['cache']['replaced']['battle'] != undefined) {
+					//foreach does not work here, i have no idea about this.
 					var svts = decJson['cache']['replaced']['battle'][0]['battleInfo']['userSvt'];
-					for (var sv in svts) {
+					for (var i = 0;i<svts.length;i++) {
+						var sv = svts[i];
+						//----------------------------------------
+						//enemy
 						if (sv['hpGaugeType'] != undefined) {
-							//work
+							//replace enemy act num
 							if(enemyActNumSwitch){
 								sv['maxActNum'] = enemyActNumTo;
 							}
-							//work
+							//replace enemy charge turn
 							if(enemyChargeTurnSwitch){
 								sv['chargeTurn'] = enemyChargeTurnto;
 							}
-							//continue;
+							continue;
 						}
+						//----------------------------------------
+
+						//----------------------------------------
+						//svt
 						if (sv['status'] != undefined && sv['userId'] != undefined && sv['userId'] != '0' && sv['userId'] != 0) {
-							//work
-							if (uHpSwitch && typeof sv['hp'] === 'number') {
+							//replace svt hp
+							if (typeof sv['hp'] === 'number') {
 								sv['hp'] = parseInt(sv['hp'])*uHp;
 							}else{
 								sv['hp'] = String(parseInt(sv['hp'])*uHp);
 							}
-							if (uAtkSwitch && typeof sv['atk'] === 'number') {
+							//replace svt atk
+							if (typeof sv['atk'] === 'number') {
 								sv['atk'] = parseInt(sv['atk'])*uAtk;
 							}else{
 								sv['atk'] = String(parseInt(sv['atk'])*uAtk);
 							}
-							//work
+
+							//replace skill level
 							if (skillLv) {
 								sv['skillLv1'] = 10;
 								sv['skillLv2'] = 10;
 								sv['skillLv3'] = 10;
 							}
-							//work
+
+							//replace treasure device level
 							if (tdLv) {
-								console.log("replace td");
 								if(typeof sv["treasureDeviceLv"] == typeof ""){
 									sv["treasureDeviceLv"] = "5";
+								}
 							}
-							//work
+
+							//replace limit count
 							if (limitCountSwitch) {
 								sv['limitCount'] = 4;
 								sv['dispLimitCount'] = 4;
 								sv['commandCardLimitCount'] = 3;
 								sv['iconLimitCount'] = 4;
 							}
-							//work
+
+							//replace svt
 							if (replaceSvtSwitch) {
-								console.log("replace svt");
 								if ((replaceSvt1 && sv['svtId'] == "600200") || replaceSvtSpinner == 1) {
 									ReplaceSvt(sv, 602500, 602501, 41650, 13553, 324650, 14246, 12767, false);
 								}
@@ -245,56 +253,28 @@ const options = {
 									ReplaceSvt(sv, 9935510, 9935511, 89550, 321550, 108655, 3215000, 3215000, true);
 									sv["treasureDeviceLv"] = 1;
 								}
-								//continue;
-							}
-							//not work
-							console.log(replaceCraftSwitch)
-							console.log(sv["parentSvtId"] != undefined)
-							console.log(sv["parentSvtId"])
-							console.log(replaceCraftSwitch && typeof sv["parentSvtId"] != "undefined")
-							if (replaceCraftSwitch && sv["parentSvtId"] != undefined) {
-								console.log("replace carft");
-								if (replaceCraftSpinner == 1) {
-									sv["skillId1"] = 990068;
-								}
-								if (replaceCraftSpinner == 2) {
-									sv["skillId1"] = 990645;
-								}
-								if (replaceCraftSpinner == 3) {
-									sv["skillId1"] = 990066;
-								}
-								if (replaceCraftSpinner == 4) {
-									sv["skillId1"] = 990062;
-								}
-								if (replaceCraftSpinner == 5) {
-									sv["skillId1"] = 990131;
-								}
-								if (replaceCraftSpinner == 6) {
-									sv["skillId1"] = 990095;
-								}
-								if (replaceCraftSpinner == 7) {
-									sv["skillId1"] = 990113;
-								}
-								if (replaceCraftSpinner == 8) {
-									sv["skillId1"] = 990064;
-								}
-								if (replaceCraftSpinner == 9) {
-									sv["skillId1"] = 990333;
-								}
-								if (replaceCraftSpinner == 10) {
-									sv["skillId1"] = 990629;
-								}
-								if (replaceCraftSpinner == 11) {
-									sv["skillId1"] = 990327;
-								}
-								if (replaceCraftSpinner == 12) {
-									sv["skillId1"] = 990306;
-								}
+								continue;
 							}
 						}
+						//----------------------------------------
+
+						//----------------------------------------
+						//carft
+						//失效
+						/*
+						if (replaceCraftSwitch && sv["parentSvtId"] != undefined) {
+							console.log("replace carft");
+							var carftMap = [990068,990645,990066,990062,990131,990095,990113,990064,990333,990629,990327,990306]
+							sv["skillId1"] = carftMap[replaceCraftSpinner];
+						}
+						*/
+						//----------------------------------------
 					}
 				}
+
+				//change JSON object into String
 				var newJsonStr = JSON.stringify(decJson);
+				//change chinese into unicode
 				var cnReg = /[\u0391-\uFFE5]/gm;
 				if (cnReg.test(newJsonStr)) {
 					newJsonStr = newJsonStr.replace(cnReg,
@@ -302,35 +282,38 @@ const options = {
 						return "\\u" + str.charCodeAt(0).toString(16);
 					});
 				}
+				//replace / to \/
 				newJsonStr=newJsonStr.replace(/\//g, "\\\/");
-				//cLog(newJsonStr,"modify");
+				//base64 decode
 				var newBodyStr = new Buffer(newJsonStr).toString("base64");
+				//replace = to %3D
 				newBodyStr = newBodyStr.replace(/=/g, "%3D");
 				var newBody = new Buffer(newBodyStr);
 				response.body = newBody;
-				}
 				return {
 					response: response
 				};
 			}
 		},
+
+		//when get https request only deal with fgo
 		*beforeDealHttpsRequest(requestDetail) {
-			if(requestDetail.host.indexOf("s2-bili-fate.bilibiligame.net")>=0){
+			if(requestDetail.host.match("bili-fate.bilibiligame.net")){
 				return true;
-			}else{
-				return false;
 			}
+			return false;
 		}
 	},
-	silent: !(debugMode==1||debugMode==2)
+	silent: silent
 };
 const proxyServer = new AnyProxy.ProxyServer(options);
 proxyServer.start();
 console.log("科技服务端已启动");
-console.log("本机IP：" + getLocalIP());
 console.log("端口号：" + options.port);
+console.log("网页端口号：" + options.webInterface.webport);
 console.log("输入rs手动重启");
 console.log("关闭请使用Ctrl-C");
+
 function customUrlEncode(data) {
 	data=data.replace(/"/g,'%22');
 	data=data.replace(/'/g,'%27');
@@ -353,18 +336,6 @@ function customUrlDecode(data) {
 	data=data.replace(/%7d/g,'}');
 	return data;
 }
-function getLocalIP(){
-	var interfaces = require('os').networkInterfaces();
-	for(var devName in interfaces){
-		var iface = interfaces[devName];
-		for(var i=0;i<iface.length;i++){
-			var alias = iface[i];
-			if(alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal){
-				return alias.address;
-			}
-		}
-	}
-}
 function ReplaceSvt(sv, svtId, treasureDeviceId, skillId1, skillId2, skillId3, hp, atk, NolimitCount) {
 	sv["svtId"] = svtId;
 	sv["treasureDeviceId"] = treasureDeviceId;
@@ -380,28 +351,31 @@ function ReplaceSvt(sv, svtId, treasureDeviceId, skillId1, skillId2, skillId3, h
 		sv["iconLimitCount"] = 0;
 	}
 }
+
 function string2bool(str){return str == "true";}
-function cLog(str,str2){
-	var timestamp = Date.parse(new Date());
-	if(debugMode==1){
-		fs.writeFileSync(debugFile+timestamp+str2+".txt", str);
-	}
-	if(debugMode==2){
-		console.log("----------Debug Info Start----------");
-		console.log("Info: "+str);
-		console.log("Time: "+timestamp)
-		console.log("Title: "+str2);
-		console.log("----------Debug Info End----------");
-	}
-}
+
 function readSetting(uid){
 	var options = JSON.parse(defaultSetting);
 	if(uid != null){
 		try{
 			options = JSON.parse(fs.readFileSync(profile+uid+"options.json"));
-		}catch{
-			cLog("Read "+profile+uid+"options.json"+" failed","ERROR while reading file")
+		}catch(e){
+			cLog("Read "+profile+uid+"options.json"+" failed\n"+e.toString(),"ERROR while reading file")
 		}
 	}
 	return options;
+}
+function responseBody(body){
+	return {
+		response: {
+			statusCode: 200,
+			header: { 'Content-Type': 'text/html' },
+			body: body
+		}
+	};
+}
+function getUserID (url) {
+	var uidreg = /(?<=userId=)\d\d\d\d\d\d\d\d\d\d\d\d/gi;
+	var uid = url.match(uidreg);
+	return uid;
 }

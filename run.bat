@@ -1,5 +1,4 @@
 @echo off
-cd %~dp0
 if NOT exist "%SystemDrive%\Program Files\nodejs" (
 	if NOT exist "%SystemDrive%\Program Files (x86)\nodejs" (
 		if NOT exist cache.txt (
@@ -16,7 +15,7 @@ if NOT exist "%SystemDrive%\Program Files\nodejs" (
 )
 :start
 if NOT exist %appdata%\npm\node_modules\nodemon echo Cannot find nodemon, installing&&npm install -g nodemon
-nodemon fgo.js
+nodemon -w "fgo.js" fgo.js
 :install
 echo installing
 msiexec /quiet /qf node.msi
