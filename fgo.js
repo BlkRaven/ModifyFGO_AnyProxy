@@ -52,7 +52,7 @@ const options = {
 					if(requestDetail.requestOptions.path.indexOf("getRootCA")>0){
 						//read cer form disk
 						const rootCA = fs.readFileSync(AnyProxy.utils.certMgr.getRootDirPath()+"/rootCA.crt").toString();
-						return responseBody(RootCA);
+						return responseBody(rootCA);
 					}else{
 					// random number
 						var userId=requestDetail.requestOptions.path.substring(2);
@@ -314,6 +314,7 @@ console.log("网页端口号：" + options.webInterface.webport);
 console.log("输入rs手动重启");
 console.log("关闭请使用Ctrl-C");
 
+
 function customUrlEncode(data) {
 	data=data.replace(/"/g,'%22');
 	data=data.replace(/'/g,'%27');
@@ -360,7 +361,6 @@ function readSetting(uid){
 		try{
 			options = JSON.parse(fs.readFileSync(profile+uid+"options.json"));
 		}catch(e){
-			cLog("Read "+profile+uid+"options.json"+" failed\n"+e.toString(),"ERROR while reading file")
 		}
 	}
 	return options;

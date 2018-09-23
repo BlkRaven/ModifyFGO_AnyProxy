@@ -1,0 +1,1 @@
+nodemon -w "fgo.js" fgo.js
