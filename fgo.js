@@ -1,24 +1,22 @@
-"use strict";
+﻿"use strict";
 const AnyProxy = require("anyproxy");
 const exec = require('child_process').exec;
 const fs = require("fs");
 
 //user setting path
 const profile = "profile/";
-//user turn random number path
-const turnfile = "turnfile/";
 //server host
 const signalServerAddressHost = "http://com.locbytes.xfgo.signal/";
 // for new users that do not have setting file on disk
 const defaultSetting = "{\"userid\":100100100100,\"password\":\"password\",\"battleCancel\":true,\"uHpSwitch\":true,\"uAtkSwitch\":true,\"uHp\":10,\"uAtk\":10,\"limitCountSwitch\":true,\"skillLv\":true,\"tdLv\":true,\"enemyActNumSwitch\":true,\"enemyActNumTo\":0,\"enemyChargeTurnSwitch\":true,\"enemyChargeTurnto\":6,\"replaceSvtSwitch\":true,\"replaceSvtSpinner\":6,\"replaceSvt2\":true,\"replaceSvt3\":true,\"replaceSvt4\":true,\"replaceSvt5\":true,\"replaceSvt6\":true,\"replaceCraftSwitch\":true,\"replaceCraftSpinner\":1}";
 // Proxy Port
-const proxyPort = 8001;
+const proxyPort = 25565;
 // Web UI
-const webInterface = false;
+const webInterface = true;
 // Web Port, when unavailble
 const webInterfacePort = 8002;
 //show anyproxy log in console
-const silent = false;
+const silent = true;
 
 //check cert
 if (!AnyProxy.utils.certMgr.ifRootCAFileExists()) {
@@ -49,18 +47,10 @@ const options = {
 			if(requestDetail.url.indexOf(signalServerAddressHost)>=0){
 				if(requestDetail.requestOptions.method == "GET"){
 					// cer
-					if(requestDetail.requestOptions.path.indexOf("getRootCA")>0){
+					if(requestDetail.url.indexOf("getRootCA")>0){
 						//read cer form disk
 						const rootCA = fs.readFileSync(AnyProxy.utils.certMgr.getRootDirPath()+"/rootCA.crt").toString();
 						return responseBody(rootCA);
-					}else{
-					// random number
-						var userId=requestDetail.requestOptions.path.substring(2);
-						// get random number
-						var randomNum=3+parseInt(Math.random()*15, 10);
-						// save random number to disk
-						fs.writeFileSync(turnfile+"turn"+userId+".txt",randomNum);
-						return responseBody(randomNum.toString());
 					}
 				}
 				if(requestDetail.requestOptions.method == "POST"){
@@ -77,15 +67,13 @@ const options = {
 							// is password correct
 							if(option.pw == oldOption.pw){
 								// save setting to disk
+								console.log(getTimestamp()+"-"+uid+"更新配置")
 								fs.writeFileSync(profile+uid+"options.json", optionString);
-								return responseBody("success");
-							}else{
-								return responseBody("failed");
 							}
 						}else{
 						// is new user
+							console.log(getTimestamp()+"-"+uid+"更新配置")
 							fs.writeFileSync(profile+uid+"options.json", optionString);
-							return responseBody("success");
 						}
 					});
 				}
@@ -96,6 +84,7 @@ const options = {
 					// read setting
 					var options = readSetting(uid);
 					if(options.battleCancel == true){
+						console.log(getTimestamp()+"-"+uid+"撤退胜利")
 						// split request data with &
 						var data = requestDetail.requestData.toString().split("&");
 						// url decode
@@ -105,15 +94,14 @@ const options = {
 						if(json.battleResult == 3){
 							//get userid
 							var uid = getUserID(requestDetail.url);
-							var randomNum = parseInt(fs.readFileSync(turnfile+"turn"+uid+".txt"), 10);
 							// set result to win
 							json.battleResult = 1;
 							// set turn num to random
-							json.elapsedTurn = randomNum;
+							json.elapsedTurn = 11;
 							// clear alive beast
 							json.aliveUniqueIds = [];
 							// change JSON object into String
-							temp=JSON.stringify(json);
+							var temp=JSON.stringify(json);
 							// encode result
 							data[11]= "result="+customUrlEncode(temp);
 							// connect array with &
@@ -172,6 +160,7 @@ const options = {
 				var replaceCraftSpinner = options.replaceCraftSpinner;
 
 				if (decJson['cache']['replaced']['battle'] != undefined) {
+					console.log(getTimestamp()+"-"+uid+"进入战斗")
 					//foreach does not work here, i have no idea about this.
 					var svts = decJson['cache']['replaced']['battle'][0]['battleInfo']['userSvt'];
 					for (var i = 0;i<svts.length;i++) {
@@ -216,9 +205,7 @@ const options = {
 
 							//replace treasure device level
 							if (tdLv) {
-								if(typeof sv["treasureDeviceLv"] == typeof ""){
-									sv["treasureDeviceLv"] = "5";
-								}
+								sv["treasureDeviceLv"] = 5;
 							}
 
 							//replace limit count
@@ -232,25 +219,27 @@ const options = {
 							//replace svt
 							if (replaceSvtSwitch) {
 								if ((replaceSvt1 && sv['svtId'] == "600200") || replaceSvtSpinner == 1) {
-									ReplaceSvt(sv, 602500, 602501, 41650, 13553, 324650, 14246, 12767, false);
+									replaceSvt(sv, 0);
 								}
 								if ((replaceSvt2 && sv['svtId'] == "600100") || replaceSvtSpinner == 2) {
-									ReplaceSvt(sv, 500800, 500801, 321550, 322550, 323650, 15259, 11546, false);
+									replaceSvt(sv, 1);
 								}
 								if ((replaceSvt3 && sv['svtId'] == "601400") || replaceSvtSpinner == 3) {
-									ReplaceSvt(sv, 501900, 501901, 82550, 100551, 101551, 14409, 11598, false);
+									replaceSvt(sv, 2);
 								}
 								if ((replaceSvt4 && sv['svtId'] == "700900") || replaceSvtSpinner == 4) {
-									ReplaceSvt(sv, 500300, 500302, 23650, 25550, 108655, 15359, 11546, false);
+									replaceSvt(sv, 3);
 								}
 								if ((replaceSvt5 && sv['svtId'] == "700500") || replaceSvtSpinner == 5) {
-									ReplaceSvt(sv, 702300, 702301, 89550, 2245550, 225550, 14500, 12556, false);
+									replaceSvt(sv, 4);
 								}
 								if ((replaceSvt6 && sv['svtId'] == "701500") || replaceSvtSpinner == 6) {
-									//ReplaceSvt(sv, 9939320, 507, 960840, 960845, 89550, 3215000, 3215000, true);
-		            	//ReplaceSvt(sv, 9939360, 100, 35551, 960845, 89550, 3215000, 3215000, true);
-		            	//ReplaceSvt(sv, 9939370, 9939371, 960842, 960843, 36450, 3215000, 3215000, true);
-									ReplaceSvt(sv, 9935510, 9935511, 89550, 321550, 108655, 3215000, 3215000, true);
+									///replaceSvt(sv, 9939320, 507, 960840, 960845, 89550, 3215000, 3215000, true);
+		            	//replaceSvt(sv, 9939360, 100, 35551, 960845, 89550, 3215000, 3215000, true);
+		            	//replaceSvt(sv, 9939370, 9939371, 960842, 960843, 36450, 3215000, 3215000, true);
+									//replaceSvt(sv, 900300, 900301, 5150, 0, 0,168780, 12005, true);
+									//replaceSvt(sv, 9935410, 441, 960416, 960417, 960418, 704822, 124440, true);
+									replaceSvt(sv, 5)
 									sv["treasureDeviceLv"] = 1;
 								}
 								continue;
@@ -259,15 +248,11 @@ const options = {
 						//----------------------------------------
 
 						//----------------------------------------
-						//carft
-						//失效
-						/*
+						//carft						
 						if (replaceCraftSwitch && sv["parentSvtId"] != undefined) {
-							console.log("replace carft");
 							var carftMap = [990068,990645,990066,990062,990131,990095,990113,990064,990333,990629,990327,990306]
-							sv["skillId1"] = carftMap[replaceCraftSpinner];
-						}
-						*/
+							sv["skillId1"] = carftMap[replaceCraftSpinner-1];
+						}						
 						//----------------------------------------
 					}
 				}
@@ -298,10 +283,7 @@ const options = {
 
 		//when get https request only deal with fgo
 		*beforeDealHttpsRequest(requestDetail) {
-			if(requestDetail.host.match("bili-fate.bilibiligame.net")){
-				return true;
-			}
-			return false;
+			return requestDetail.host.indexOf("bilibiligame.net")>0;
 		}
 	},
 	silent: silent
@@ -309,11 +291,10 @@ const options = {
 const proxyServer = new AnyProxy.ProxyServer(options);
 proxyServer.start();
 console.log("科技服务端已启动");
-console.log("端口号：" + options.port);
-console.log("网页端口号：" + options.webInterface.webport);
-console.log("输入rs手动重启");
-console.log("关闭请使用Ctrl-C");
-
+console.log("端口号：" + proxyPort);
+console.log("网页端口号：" + webInterfacePort);
+console.log("Ctrl-C输入N重启");
+console.log("Ctrl-C输入Y关闭");
 
 function customUrlEncode(data) {
 	data=data.replace(/"/g,'%22');
@@ -337,15 +318,18 @@ function customUrlDecode(data) {
 	data=data.replace(/%7d/g,'}');
 	return data;
 }
-function ReplaceSvt(sv, svtId, treasureDeviceId, skillId1, skillId2, skillId3, hp, atk, NolimitCount) {
-	sv["svtId"] = svtId;
-	sv["treasureDeviceId"] = treasureDeviceId;
-	sv["skillId1"] = skillId1;
-	sv["skillId2"] = skillId2;
-	sv["skillId3"] = skillId3;
-	sv["hp"] = hp;
-	sv["atk"] = atk;
-	if (NolimitCount) {
+
+function replaceSvt(sv, id) {
+	var str = "{\"svt\":[{\"id\":602500,\"tdid\":602501,\"sk1\":41650,\"sk2\":13553,\"sk3\":324650,\"hp\":14246,\"atk\":12767,\"limit\":false},{\"id\":500800,\"tdid\":500801,\"sk1\":321550,\"sk2\":322550,\"sk3\":323650,\"hp\":15259,\"atk\":11546,\"limit\":false},{\"id\":501900,\"tdid\":501901,\"sk1\":82550,\"sk2\":100551,\"sk3\":101551,\"hp\":14409,\"atk\":11598,\"limit\":false},{\"id\":500300,\"tdid\":500302,\"sk1\":23650,\"sk2\":25550,\"sk3\":108655,\"hp\":15359,\"atk\":11546,\"limit\":false},{\"id\":702300,\"tdid\":702301,\"sk1\":89550,\"sk2\":224550,\"sk3\":225550,\"hp\":14500,\"atk\":12556,\"limit\":false},{\"id\":9935510,\"tdid\":9935511,\"sk1\":89550,\"sk2\":321550,\"sk3\":108655,\"hp\":3215500,\"atk\":3215500,\"limit\":true}]}"
+	var data = JSON.parse(str);
+	sv["svtId"] = data.svt[id].id;
+	sv["treasureDeviceId"] = data.svt[id].tdid;
+	sv["skillId1"] = data.svt[id].sk1;
+	sv["skillId2"] = data.svt[id].sk2;
+	sv["skillId3"] = data.svt[id].sk3;
+	sv["hp"] = data.svt[id].hp;
+	sv["atk"] = data.svt[id].atk;
+	if (data.svt[id].limit) {
 		sv["limitCount"] = 0;
 		sv["dispLimitCount"] = 0;
 		sv["commandCardLimitCount"] = 0;
@@ -365,17 +349,13 @@ function readSetting(uid){
 	}
 	return options;
 }
-function responseBody(body){
-	return {
-		response: {
-			statusCode: 200,
-			header: { 'Content-Type': 'text/html' },
-			body: body
-		}
-	};
-}
+
 function getUserID (url) {
 	var uidreg = /(?<=userId=)\d\d\d\d\d\d\d\d\d\d\d\d/gi;
 	var uid = url.match(uidreg);
 	return uid;
+}
+
+function getTimestamp() {
+	return new Date().getTime();
 }
