@@ -3,22 +3,22 @@ const AnyProxy = require("anyproxy");
 const exec = require('child_process').exec;
 const fs = require("fs");
 
-//user setting path
+// user setting path
 const profile = "profile/";
-//server host
+// server host
 const signalServerAddressHost = "http://com.locbytes.xfgo.signal/";
-// for new users that do not have setting file on disk
+//  for new users that do not have setting file on disk
 const defaultSetting = "{\"userid\":100100100100,\"password\":\"password\",\"battleCancel\":true,\"uHpSwitch\":true,\"uAtkSwitch\":true,\"uHp\":10,\"uAtk\":10,\"limitCountSwitch\":true,\"skillLv\":true,\"tdLv\":true,\"enemyActNumSwitch\":true,\"enemyActNumTo\":0,\"enemyChargeTurnSwitch\":true,\"enemyChargeTurnto\":6,\"replaceSvtSwitch\":true,\"replaceSvtSpinner\":6,\"replaceSvt2\":true,\"replaceSvt3\":true,\"replaceSvt4\":true,\"replaceSvt5\":true,\"replaceSvt6\":true,\"replaceCraftSwitch\":true,\"replaceCraftSpinner\":1}";
-// Proxy Port
+//  Proxy Port
 const proxyPort = 25565;
-// Web UI
+//  Web UI
 const webInterface = true;
-// Web Port, when unavailble
+//  Web Port, when unavailble
 const webInterfacePort = 8002;
-//show anyproxy log in console
-const silent = true;
+// show anyproxy log in console
+const silent = false;
 
-//check cert
+// check cert
 if (!AnyProxy.utils.certMgr.ifRootCAFileExists()) {
 	AnyProxy.utils.certMgr.generateRootCA((error, keyPath) => {
 		if (!error) {
@@ -48,9 +48,15 @@ const options = {
 				if(requestDetail.requestOptions.method == "GET"){
 					// cer
 					if(requestDetail.url.indexOf("getRootCA")>0){
-						//read cer form disk
+						// read cer form disk
 						const rootCA = fs.readFileSync(AnyProxy.utils.certMgr.getRootDirPath()+"/rootCA.crt").toString();
-						return responseBody(rootCA);
+						return {
+							response: {
+								statusCode: 200,
+								header: {'Content-Type':'text/html'},
+								body: rootCA
+							}
+						};
 					}
 				}
 				if(requestDetail.requestOptions.method == "POST"){
@@ -92,7 +98,7 @@ const options = {
 						// get result
 						var json = JSON.parse(data[11].substring(7));
 						if(json.battleResult == 3){
-							//get userid
+							// get userid
 							var uid = getUserID(requestDetail.url);
 							// set result to win
 							json.battleResult = 1;
@@ -124,19 +130,19 @@ const options = {
 		*beforeSendResponse(requestDetail, responseDetail) {
 			if((requestDetail.requestData.indexOf("key=battlesetup")>0||requestDetail.requestData.indexOf("key=battleresume")>0)&&requestDetail.url.indexOf("ac.php")>0){
 				var response = Object.assign({}, responseDetail.response);
-				//get response body
+				// get response body
 				var rawBody = response.body.toString();
-				//replace %3D to =
+				// replace %3D to =
 				rawBody = rawBody.replace(/%3D/g, "=");
-				//base64 encode
+				// base64 encode
 				var jsonStr = new Buffer(rawBody, "base64").toString();
-				//change into JSON object
+				// change into JSON object
 				var decJson = JSON.parse(jsonStr);
 
-				//need XFGO
+				// need XFGO
 				decJson.sign="";
 
-				//get setting
+				// get setting
 				var uid = getUserID(requestDetail.url);
 				var options = readSetting(uid);
 				var uHp = options.uHp;
@@ -159,56 +165,82 @@ const options = {
 				var replaceCraftSwitch = options.replaceCraftSwitch;
 				var replaceCraftSpinner = options.replaceCraftSpinner;
 
+				if (decJson['response']['resCode'] != 00){
+					// if resCode does not equal to 00, make user restart the game.
+					var response = {"response":[{"resCode":"96","success":{},"fail":{"title":"","detail":"连接出错，请重启游戏","action":"goto_title"},"nid":"0","usk":"3d59b5b3f897ddd93402"}],"cache":{},"sign":""}
+					// change JSON object into String
+					var newJsonStr = JSON.stringify(decJson);
+					// change chinese into unicode
+					var cnReg = /[\u0391-\uFFE5]/gm;
+					if (cnReg.test(newJsonStr)) {
+						newJsonStr = newJsonStr.replace(cnReg,
+						function(str) {
+							return "\\u" + str.charCodeAt(0).toString(16);
+						});
+					}
+					// replace / to \/
+					newJsonStr=newJsonStr.replace(/\//g, "\\\/");
+					// base64 decode
+					var newBodyStr = new Buffer(newJsonStr).toString("base64");
+					// replace = to %3D
+					newBodyStr = newBodyStr.replace(/=/g, "%3D");
+					var newBody = new Buffer(newBodyStr);
+					response.body = newBody;
+					return {
+						response: response
+					};
+				}
+				
 				if (decJson['cache']['replaced']['battle'] != undefined) {
 					console.log(getTimestamp()+"-"+uid+"进入战斗")
-					//foreach does not work here, i have no idea about this.
+					// foreach does not work here, i have no idea about this.
 					var svts = decJson['cache']['replaced']['battle'][0]['battleInfo']['userSvt'];
 					for (var i = 0;i<svts.length;i++) {
 						var sv = svts[i];
-						//----------------------------------------
-						//enemy
+						// ----------------------------------------
+						// enemy
 						if (sv['hpGaugeType'] != undefined) {
-							//replace enemy act num
+							// replace enemy act num
 							if(enemyActNumSwitch){
 								sv['maxActNum'] = enemyActNumTo;
 							}
-							//replace enemy charge turn
+							// replace enemy charge turn
 							if(enemyChargeTurnSwitch){
 								sv['chargeTurn'] = enemyChargeTurnto;
 							}
 							continue;
 						}
-						//----------------------------------------
+						// ----------------------------------------
 
-						//----------------------------------------
-						//svt
+						// ----------------------------------------
+						// svt
 						if (sv['status'] != undefined && sv['userId'] != undefined && sv['userId'] != '0' && sv['userId'] != 0) {
-							//replace svt hp
+							// replace svt hp
 							if (typeof sv['hp'] === 'number') {
 								sv['hp'] = parseInt(sv['hp'])*uHp;
 							}else{
 								sv['hp'] = String(parseInt(sv['hp'])*uHp);
 							}
-							//replace svt atk
+							// replace svt atk
 							if (typeof sv['atk'] === 'number') {
 								sv['atk'] = parseInt(sv['atk'])*uAtk;
 							}else{
 								sv['atk'] = String(parseInt(sv['atk'])*uAtk);
 							}
 
-							//replace skill level
+							// replace skill level
 							if (skillLv) {
 								sv['skillLv1'] = 10;
 								sv['skillLv2'] = 10;
 								sv['skillLv3'] = 10;
 							}
 
-							//replace treasure device level
+							// replace treasure device level
 							if (tdLv) {
 								sv["treasureDeviceLv"] = 5;
 							}
 
-							//replace limit count
+							// replace limit count
 							if (limitCountSwitch) {
 								sv['limitCount'] = 4;
 								sv['dispLimitCount'] = 4;
@@ -216,50 +248,35 @@ const options = {
 								sv['iconLimitCount'] = 4;
 							}
 
-							//replace svt
+							// replace svt
 							if (replaceSvtSwitch) {
-								if ((replaceSvt1 && sv['svtId'] == "600200") || replaceSvtSpinner == 1) {
-									replaceSvt(sv, 0);
+								if (replaceSvtSpinner != 0){
+									replaceSvt(sv, replaceSvtSpinner);
 								}
-								if ((replaceSvt2 && sv['svtId'] == "600100") || replaceSvtSpinner == 2) {
-									replaceSvt(sv, 1);
-								}
-								if ((replaceSvt3 && sv['svtId'] == "601400") || replaceSvtSpinner == 3) {
-									replaceSvt(sv, 2);
-								}
-								if ((replaceSvt4 && sv['svtId'] == "700900") || replaceSvtSpinner == 4) {
-									replaceSvt(sv, 3);
-								}
-								if ((replaceSvt5 && sv['svtId'] == "700500") || replaceSvtSpinner == 5) {
-									replaceSvt(sv, 4);
-								}
-								if ((replaceSvt6 && sv['svtId'] == "701500") || replaceSvtSpinner == 6) {
-									///replaceSvt(sv, 9939320, 507, 960840, 960845, 89550, 3215000, 3215000, true);
-		            	//replaceSvt(sv, 9939360, 100, 35551, 960845, 89550, 3215000, 3215000, true);
-		            	//replaceSvt(sv, 9939370, 9939371, 960842, 960843, 36450, 3215000, 3215000, true);
-									//replaceSvt(sv, 900300, 900301, 5150, 0, 0,168780, 12005, true);
-									//replaceSvt(sv, 9935410, 441, 960416, 960417, 960418, 704822, 124440, true);
-									replaceSvt(sv, 5)
-									sv["treasureDeviceLv"] = 1;
-								}
+								if ((replaceSvt1 && sv['svtId'] == "600200")) {replaceSvt(sv, 0);}
+								if ((replaceSvt2 && sv['svtId'] == "600100")) {replaceSvt(sv, 1);}
+								if ((replaceSvt3 && sv['svtId'] == "601400")) {replaceSvt(sv, 2);}
+								if ((replaceSvt4 && sv['svtId'] == "700900")) {replaceSvt(sv, 3);}
+								if ((replaceSvt5 && sv['svtId'] == "700500")) {replaceSvt(sv, 4);}
+								if ((replaceSvt6 && sv['svtId'] == "701500")) {replaceSvt(sv, 5);sv["treasureDeviceLv"] = 1;}
 								continue;
 							}
 						}
-						//----------------------------------------
+						// ----------------------------------------
 
-						//----------------------------------------
-						//carft						
+						// ----------------------------------------
+						// carft						
 						if (replaceCraftSwitch && sv["parentSvtId"] != undefined) {
 							var carftMap = [990068,990645,990066,990062,990131,990095,990113,990064,990333,990629,990327,990306]
 							sv["skillId1"] = carftMap[replaceCraftSpinner-1];
 						}						
-						//----------------------------------------
+						// ----------------------------------------
 					}
 				}
 
-				//change JSON object into String
+				// change JSON object into String
 				var newJsonStr = JSON.stringify(decJson);
-				//change chinese into unicode
+				// change chinese into unicode
 				var cnReg = /[\u0391-\uFFE5]/gm;
 				if (cnReg.test(newJsonStr)) {
 					newJsonStr = newJsonStr.replace(cnReg,
@@ -267,11 +284,11 @@ const options = {
 						return "\\u" + str.charCodeAt(0).toString(16);
 					});
 				}
-				//replace / to \/
+				// replace / to \/
 				newJsonStr=newJsonStr.replace(/\//g, "\\\/");
-				//base64 decode
+				// base64 decode
 				var newBodyStr = new Buffer(newJsonStr).toString("base64");
-				//replace = to %3D
+				// replace = to %3D
 				newBodyStr = newBodyStr.replace(/=/g, "%3D");
 				var newBody = new Buffer(newBodyStr);
 				response.body = newBody;
@@ -281,7 +298,7 @@ const options = {
 			}
 		},
 
-		//when get https request only deal with fgo
+		// when get https request only deal with fgo
 		*beforeDealHttpsRequest(requestDetail) {
 			return requestDetail.host.indexOf("bilibiligame.net")>0;
 		}
@@ -297,6 +314,17 @@ console.log("Ctrl-C输入N重启");
 console.log("Ctrl-C输入Y关闭");
 
 function customUrlEncode(data) {
+	try{
+		var decoded = [/\"/g,/\'/g,/:/g,/\,/g,/\[/g,/\]/g,/\{/g,/\}/g];
+		var encoded = ['%22','%27','%3a','%2c','%5b','%5d','%7b','%7d'];
+		var test = data;
+		for (var i = 0;i < decoded.length;i++) {
+			test = test.replace(decoded[i],encoded[i]);
+		}
+		console.log(test);
+	}catch(e){
+		console.log(e);
+	}
 	data=data.replace(/"/g,'%22');
 	data=data.replace(/'/g,'%27');
 	data=data.replace(/:/g,'%3a');
@@ -320,8 +348,7 @@ function customUrlDecode(data) {
 }
 
 function replaceSvt(sv, id) {
-	var str = "{\"svt\":[{\"id\":602500,\"tdid\":602501,\"sk1\":41650,\"sk2\":13553,\"sk3\":324650,\"hp\":14246,\"atk\":12767,\"limit\":false},{\"id\":500800,\"tdid\":500801,\"sk1\":321550,\"sk2\":322550,\"sk3\":323650,\"hp\":15259,\"atk\":11546,\"limit\":false},{\"id\":501900,\"tdid\":501901,\"sk1\":82550,\"sk2\":100551,\"sk3\":101551,\"hp\":14409,\"atk\":11598,\"limit\":false},{\"id\":500300,\"tdid\":500302,\"sk1\":23650,\"sk2\":25550,\"sk3\":108655,\"hp\":15359,\"atk\":11546,\"limit\":false},{\"id\":702300,\"tdid\":702301,\"sk1\":89550,\"sk2\":224550,\"sk3\":225550,\"hp\":14500,\"atk\":12556,\"limit\":false},{\"id\":9935510,\"tdid\":9935511,\"sk1\":89550,\"sk2\":321550,\"sk3\":108655,\"hp\":3215500,\"atk\":3215500,\"limit\":true}]}"
-	var data = JSON.parse(str);
+	var svt = {"svt":[{"id":602500,"tdid":602501,"sk1":41650,"sk2":13553,"sk3":324650,"hp":14246,"atk":12767,"limit":false},{"id":500800,"tdid":500801,"sk1":321550,"sk2":322550,"sk3":323650,"hp":15259,"atk":11546,"limit":false},{"id":501900,"tdid":501901,"sk1":82550,"sk2":100551,"sk3":101551,"hp":14409,"atk":11598,"limit":false},{"id":500300,"tdid":500302,"sk1":23650,"sk2":25550,"sk3":108655,"hp":15359,"atk":11546,"limit":false},{"id":702300,"tdid":702301,"sk1":89550,"sk2":224550,"sk3":225550,"hp":14500,"atk":12556,"limit":false},{"id":9935510,"tdid":9935511,"sk1":89550,"sk2":321550,"sk3":108655,"hp":3215500,"atk":3215500,"limit":true}]};
 	sv["svtId"] = data.svt[id].id;
 	sv["treasureDeviceId"] = data.svt[id].tdid;
 	sv["skillId1"] = data.svt[id].sk1;
@@ -337,14 +364,13 @@ function replaceSvt(sv, id) {
 	}
 }
 
-function string2bool(str){return str == "true";}
-
 function readSetting(uid){
 	var options = JSON.parse(defaultSetting);
 	if(uid != null){
 		try{
 			options = JSON.parse(fs.readFileSync(profile+uid+"options.json"));
 		}catch(e){
+			// who cares?
 		}
 	}
 	return options;
