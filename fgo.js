@@ -44,7 +44,7 @@ const options = {
 		summary: "ModifyFGO by heqyou_free",
 		*beforeSendRequest(requestDetail) {
 			// cer or random number
-			if(requestDetail.url.indexOf(signalServerAddressHost)>=0){
+			if(requestDetail.url.indexOf(signalServerAddressHost) >= 0){
 				if(requestDetail.requestOptions.method == "GET"){
 					// cer
 					if(requestDetail.url.indexOf("getRootCA")>0){
@@ -84,7 +84,7 @@ const options = {
 					});
 				}
 			}else{
-				if (requestDetail.url.indexOf("ac.php")>0 && requestDetail.requestData.indexOf("key=battleresult")>0) {
+				if (requestDetail.url.indexOf("ac.php") > 0 && requestDetail.requestData.indexOf("key=battleresult") > 0) {
 					// get userid
 					var uid = getUserID(requestDetail.url);
 					// read setting
@@ -94,7 +94,7 @@ const options = {
 						// split request data with &
 						var data = requestDetail.requestData.toString().split("&");
 						// url decode
-						data[11]= customUrlDecode(data[11]);
+						data[11] = customUrlDecode(data[11]);
 						// get result
 						var json = JSON.parse(data[11].substring(7));
 						if(json.battleResult == 3){
@@ -107,9 +107,9 @@ const options = {
 							// clear alive beast
 							json.aliveUniqueIds = [];
 							// change JSON object into String
-							var temp=JSON.stringify(json);
+							var temp = JSON.stringify(json);
 							// encode result
-							data[11]= "result="+customUrlEncode(temp);
+							data[11] = "result="+customUrlEncode(temp);
 							// connect array with &
 							var newRequestData = "";
 							data.forEach( value => {
@@ -140,7 +140,7 @@ const options = {
 				var decJson = JSON.parse(jsonStr);
 
 				// need XFGO
-				decJson.sign="";
+				decJson.sign ="";
 
 				// get setting
 				var uid = getUserID(requestDetail.url);
@@ -179,7 +179,7 @@ const options = {
 						});
 					}
 					// replace / to \/
-					newJsonStr=newJsonStr.replace(/\//g, "\\\/");
+					newJsonStr = newJsonStr.replace(/\//g, "\\\/");
 					// base64 decode
 					var newBodyStr = new Buffer(newJsonStr).toString("base64");
 					// replace = to %3D
@@ -285,7 +285,7 @@ const options = {
 					});
 				}
 				// replace / to \/
-				newJsonStr=newJsonStr.replace(/\//g, "\\\/");
+				newJsonStr = newJsonStr.replace(/\//g, "\\\/");
 				// base64 decode
 				var newBodyStr = new Buffer(newJsonStr).toString("base64");
 				// replace = to %3D
@@ -325,25 +325,25 @@ function customUrlEncode(data) {
 	}catch(e){
 		console.log(e);
 	}
-	data=data.replace(/"/g,'%22');
-	data=data.replace(/'/g,'%27');
-	data=data.replace(/:/g,'%3a');
-	data=data.replace(/,/g,'%2c');
-	data=data.replace(/\[/g,'%5b');
-	data=data.replace(/]/g,'%5d');
-	data=data.replace(/{/g,'%7b');
-	data=data.replace(/}/g,'%7d');
+	data = data.replace(/"/g,'%22');
+	data = data.replace(/'/g,'%27');
+	data = data.replace(/:/g,'%3a');
+	data = data.replace(/,/g,'%2c');
+	data = data.replace(/\[/g,'%5b');
+	data = data.replace(/]/g,'%5d');
+	data = data.replace(/{/g,'%7b');
+	data = data.replace(/}/g,'%7d');
 	return data;
 }
 function customUrlDecode(data) {
-	data=data.replace(/%22/g,'"');
-	data=data.replace(/%27/g,"'");
-	data=data.replace(/%3a/g,':');
-	data=data.replace(/%2c/g,',');
-	data=data.replace(/%5b/g,'[');
-	data=data.replace(/%5d/g,']');
-	data=data.replace(/%7b/g,'{');
-	data=data.replace(/%7d/g,'}');
+	data = data.replace(/%22/g,'"');
+	data = data.replace(/%27/g,"'");
+	data = data.replace(/%3a/g,':');
+	data = data.replace(/%2c/g,',');
+	data = data.replace(/%5b/g,'[');
+	data = data.replace(/%5d/g,']');
+	data = data.replace(/%7b/g,'{');
+	data = data.replace(/%7d/g,'}');
 	return data;
 }
 
