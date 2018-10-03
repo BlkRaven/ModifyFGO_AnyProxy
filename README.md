@@ -26,7 +26,7 @@ npm install -g anyproxy
 1. 下载对应系统版本和框架的[Xposed刷机包](https://dl-xda.xposed.info/framework/)  
 2. 在recovery中刷入Xposed  
 3. 同方法1第3步及之后
-#### 方法3（测试中）
+#### 方法3（可行，但EXposed有限制）
 1. 安装[EXposed](https://github.com/heqyoufree/ModifyFGO_AnyProxy/raw/master/EXposed.apk)
 2. 在EXposed中安装FGO
 3. 安装XFGO
