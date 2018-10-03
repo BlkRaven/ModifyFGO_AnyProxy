@@ -165,7 +165,7 @@ const options = {
 				var replaceCraftSwitch = options.replaceCraftSwitch;
 				var replaceCraftSpinner = options.replaceCraftSpinner;
 
-				if (decJson['response']['resCode'] != 00){
+				if (decJson['response']['resCode'] != "00"){
 					// if resCode does not equal to 00, make user restart the game.
 					var response = {"response":[{"resCode":"96","success":{},"fail":{"title":"","detail":"连接出错，请重启游戏","action":"goto_title"},"nid":"0","usk":"3d59b5b3f897ddd93402"}],"cache":{},"sign":""}
 					// change JSON object into String
